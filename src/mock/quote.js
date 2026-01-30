@@ -1,294 +1,224 @@
 import Mock from 'mockjs'
 
-/**
- * 模拟行情列表数据
- */
-Mock.mock(/\/quote\/list/, 'get', (options) => {
-  // 修复：移除多余的 JSON.parse/JSON.stringify，补全括号，处理无参数情况
-  const urlParamStr = options.url.split('?')[1] || ''; // 处理无参数的情况
-  const params = urlParamStr
-    .split('&')
-    .reduce((obj, item) => {
-      // 修复：跳过空字符串（比如参数串末尾有&的情况）
-      if (!item) return obj;
-      const [key, value] = item.split('=')
-      obj[decodeURIComponent(key)] = decodeURIComponent(value)
-      return obj
-    }, {})
-
-  // // 新增：兼容market参数（无论传什么，都返回A股数据，避免过滤）
-  // const market = params.market || 'cn_a'
-  // // 修复：即使非A股，也返回空数组（而非total=0），匹配前端Array(0)的接收逻辑
-  // if (market !== 'cn_a') {
-  //   return {
-  //     code: 200,
-  //     msg: 'success',
-  //     data: [] // 直接返回空数组，匹配前端期望的数组格式
-  //   }
-  // }  
-  // 模拟1000条数据（支持分页）
-  const total = 1000
-  const page = parseInt(params.page) || 1
-  const size = parseInt(params.size) || 20
-  const startIndex = (page - 1) * size
-
-  // 生成模拟数据（调整字段名，匹配前端StockQuote.vue期望的字段）
-  const list = Mock.mock({
-    [`array|${size}`]: [
-      {
-        'code|6': /[0-9]/, // 股票代码（6位数字）
-        'name': '@cword(2,4)', // 股票名称（2-4个中文字符）
-        'price|100-2000.2': 1, // 最新价（100-2000，保留2位小数）
-        'change|1-50.2': 1, // 涨跌额（1-50，保留2位小数）
-        'change_rate|0.01-10.2': 1, // 涨跌幅（0.01-10，保留2位小数）
-        'volume|100000-10000000': 1, // 成交量（10万-1000万）
-        'high|100-2000.2': 1, // 最高价
-        'low|100-2000.2': 1, // 最低价
-        // 新增：补充前端可能期望的字段（匹配quote.js中的state字段）
-        'percent': function() { return this.change_rate }, // 兼容sortType: 'percent'
-        'industry': '@cword(2,4)', // 行业
-        'concept': '@cword(2,4)' // 概念
-      }
+// 大盘指数数据
+Mock.mock(/\/api\/quote\/marketIndex/, 'get', () => {
+  return {
+    code: 200,
+    msg: 'success',
+    data: [
+      { code: '000300', name: '沪深300', change: 0.85 },
+      { code: '000001', name: '上证指数', change: 0.32 },
+      { code: '399001', name: '深证成指', change: 1.25 },
+      { code: '399006', name: '创业板指', change: 1.89 }
     ]
-  }).array
-
-  // 处理涨跌幅正负（随机）
-  const formattedList = list.map(item => {
-    // 50%概率为下跌
-    if (Math.random() > 0.5) {
-      item.change = -item.change
-      item.change_rate = -item.change_rate
-      item.percent = -item.percent // 同步percent字段
-    }
-    return item
-  })
-
-  // 排序处理
-  if (params.sort_prop && params.sort_order) {
-    formattedList.sort((a, b) => {
-      const prop = params.sort_prop === 'changeRate' ? 'change_rate' : params.sort_prop
-      return params.sort_order === 'asc' ? a[prop] - b[prop] : b[prop] - a[prop]
-    })
-  }
-
-  // 修复2：避免直接赋值覆盖formattedList，先复制再处理搜索
-    let finalList = [...formattedList];
-    // 优化后代码（确保数据长度符合分页逻辑）
-    if (params.keyword) {
-      const keyword = params.keyword.toLowerCase()
-      const filtered = finalList.filter(item => 
-        item.code.includes(keyword) || item.name.toLowerCase().includes(keyword)
-      )
-      // 修复：搜索后总条数为 filtered.length，重新计算分页截取范围
-    const filteredTotal = filtered.length
-    const searchStartIndex = (page - 1) * size
-    finalList = filtered.slice(searchStartIndex, searchStartIndex + size)
-    total = filteredTotal // 更新总条数，前端分页组件能正确显示页数
-  } else {
-    finalList = finalList.slice(startIndex, startIndex + size)
-  }
-  // 返回时携带更新后的 total
-    return {
-      code: 200,
-      msg: 'success',
-      list: finalList,
-      total: filteredTotal,
-      page: page,
-      size: size
   }
 })
 
-/**
- * 模拟K线数据（30天）
- */
-Mock.mock(/\/quote\/kline/, 'get', (options) => {
-  // 修复1：移除多余的 JSON.parse/JSON.stringify，补全括号，处理无参数情况
-  const urlParamStr = options.url.split('?')[1] || ''; // 处理无参数的情况
-  const params = urlParamStr
-    .split('&')
-    .reduce((obj, item) => {
-      // 修复：跳过空字符串（比如参数串末尾有&的情况）
-      if (!item) return obj;
-      const [key, value] = item.split('=')
-      obj[decodeURIComponent(key)] = decodeURIComponent(value)
-      return obj
-    }, {})
+// 热门概念数据
+Mock.mock(/\/api\/quote\/hotConcepts/, 'get', () => {
+  return {
+    code: 200,
+    msg: 'success',
+    data: [
+      { name: '人工智能', stockCount: 56 },
+      { name: '新能源汽车', stockCount: 42 },
+      { name: '消费复苏', stockCount: 38 },
+      { name: '半导体', stockCount: 31 }
+    ]
+  }
+})
 
-  const limit = parseInt(params.limit) || 30
-  const type = params.type || 'day'
+// 行情列表数据（核心修复：解析所有参数 + 兼容筛选）
+Mock.mock(/\/api\/quote\/getQuoteList/, 'get', (options) => {
+  console.log('Mock拦截到请求：', options); 
+  // 解析所有参数（含筛选参数 changeRate/volume）
+  const urlParams = new URLSearchParams(options.url.split('?')[1] || '');
+  const market = urlParams.get('market') || 'cnA';
+  const page = parseInt(urlParams.get('page')) || 1;
+  const size = parseInt(urlParams.get('size')) || 20;
+  const changeRate = urlParams.get('changeRate') || '';
+  const volume = urlParams.get('volume') || '';
 
-  // 优化后代码（周/月按正确粒度递减）
-  const getDateList = (count) => {
-    const dateList = []
-    for (let i = count - 1; i >= 0; i--) {
-      const date = new Date()
-      if (type === 'day') {
-        date.setDate(date.getDate() - i) // 日线：按天递减
-      } else if (type === 'week') {
-        date.setDate(date.getDate() - i * 7) // 周线：按周递减
-        date.setDate(date.getDate() - (date.getDay() || 7) + 1) // 取周一
-      } else if (type === 'month') {
-        date.setMonth(date.getMonth() - i) // 月线：按月递减
-        date.setDate(1) // 取当月1号
+  // 基础数据总数
+  const total = market === 'cnA' ? 200 : 80;
+  // 生成基础数据
+  let list = Mock.mock({
+    [`array|${total}`]: [
+      {
+        'code|6': /[0-9]/,
+        'name': '@ctitle(2,4)',
+        'price|10-1000.2': 1,
+        'change| -5~5.2': 1,
+        'change_rate| -5~5.2': 1,
+        'volume|100000-10000000': 1,
+        'high|10-1000.2': 1,
+        'low|10-1000.2': 1
       }
-      dateList.push(date.toLocaleDateString().replace(/\//g, '-'))
-    }
-    // 去重（避免周/月粒度下日期重复）
-    return [...new Set(dateList)]
+    ]
+  }).array;
+
+  // 兼容筛选参数（模拟筛选逻辑）
+  // 1. 涨跌幅筛选
+  if (changeRate) {
+    const [min, max] = changeRate.split('-').map(Number);
+    list = list.filter(item => {
+      return item.change_rate >= min && item.change_rate <= max;
+    });
+  }
+  // 2. 成交量筛选
+  if (volume) {
+    const minVolume = parseInt(volume);
+    list = list.filter(item => item.volume >= minVolume);
   }
 
-  const dateList = getDateList(limit)
-  const klineData = []
+  // 处理分页（基于筛选后的数据）
+  const filteredTotal = list.length;
+  const start = (page - 1) * size;
+  const end = start + size;
+  const paginatedList = list.slice(start, end);
 
-  // 生成K线数据
-  dateList.forEach(date => {
-    const open = Mock.mock('@float(100, 2000, 2, 2)')
-    const close = Mock.mock(`@float(${open * 0.95}, ${open * 1.05}, 2, 2)`)
-    const high = Mock.mock(`@float(${Math.max(open, close)}, ${Math.max(open, close) * 1.03}, 2, 2)`)
-    const low = Mock.mock(`@float(${Math.min(open, close) * 0.97}, ${Math.min(open, close)}, 2, 2)`)
-
-    klineData.push({
-      date,
-      open,
-      close,
-      high,
-      low,
-      volume: Mock.mock('@integer(100000, 10000000)')
-    })
-  })
+  // 处理涨跌幅与价格逻辑
+  const finalList = paginatedList.map(item => {
+    item.change = Math.round((item.price * item.change_rate / 100) * 100) / 100;
+    item.high = Math.max(item.price, item.high);
+    item.low = Math.min(item.price, item.low);
+    return item;
+  });
 
   return {
     code: 200,
     msg: 'success',
-    data: klineData // 直接返回数组
+    data: {
+      list: finalList,
+      total: filteredTotal,
+      page: page,
+      size: size
+    }
   }
 })
 
-/**
- * 模拟个股详情数据
- */
-Mock.mock(/\/quote\/detail\/\d+/, 'get', () => {
-  const code = Mock.mock('@integer(600000, 601999)')
-  const name = Mock.mock('@cword(2,4)')
-  const price = Mock.mock('@float(100, 2000, 2, 2)')
-  const change = Mock.mock('@float(1, 50, 2, 2)')
-  const changeRate = (change / price * 100).toFixed(2)
-  const percent = changeRate // 补充percent字段
-
+// 个股详情数据
+Mock.mock(/\/api\/quote\/getStockDetail/, 'get', (options) => {
+  // 容错：避免code解析失败
+  let code = '600519';
+  try {
+    code = options.url.match(/code=([^&]+)/)[1];
+  } catch (e) {}
+  
   return {
     code: 200,
     msg: 'success',
     data: {
       quote: {
         code,
-        name,
-        price,
-        change: Math.random() > 0.5 ? change : -change,
-        change_rate: Math.random() > 0.5 ? changeRate : -changeRate,
-        percent: Math.random() > 0.5 ? changeRate : -changeRate, // 兼容前端字段
-        volume: Mock.mock('@integer(100000, 10000000)'),
-        high: Mock.mock(`@float(${price}, ${price * 1.03}, 2, 2)`),
-        low: Mock.mock(`@float(${price * 0.97}, ${price}, 2, 2)`),
-        open: Mock.mock(`@float(${price * 0.98}, ${price * 1.02}, 2, 2)`),
-        industry: '@cword(2,4)',
-        concept: '@cword(2,4)'
+        name: Mock.Random.ctitle(2, 4),
+        price: Mock.Random.float(10, 1000, 2, 2),
+        change: Mock.Random.float(-50, 50, 2, 2),
+        change_rate: Mock.Random.float(-5, 5, 2, 2),
+        volume: Mock.Random.integer(1000000, 100000000),
+        high: Mock.Random.float(10, 1000, 2, 2),
+        low: Mock.Random.float(10, 1000, 2, 2),
+        market: code.startsWith('6') ? '沪A' : '深A'
       },
-      // 修复后：按周期分组，补全所有K线字段
       kline: {
-        // 日线：30天数据（默认显示）
         day: Mock.mock({
           [`array|30`]: [
             {
-              'date': '@date("yyyy-MM-dd")',       // 日期
-              'open|100-2000.2': 1,                // 开盘价
-              'close|100-2000.2': 1,               // 收盘价
-              'high|100-2000.2': 1,                // 最高价
-              'low|100-2000.2': 1,                 // 最低价
-              'volume|100000-10000000': 1          // 成交量
-            }
-          ]
-        }).array,
-        // 周线：12周数据（约3个月）
-        week: Mock.mock({
-          [`array|12`]: [
-            {
-              'date': '@date("yyyy-MM-dd")',
-              'open|100-2000.2': 1,
-              'close|100-2000.2': 1,
-              'high|100-2000.2': 1,
-              'low|100-2000.2': 1,
-              'volume|100000-10000000': 1
-            }
-          ]
-        }).array,
-        // 月线：6月数据（约半年）
-        month: Mock.mock({
-          [`array|6`]: [
-            {
-              'date': '@date("yyyy-MM-dd")',
-              'open|100-2000.2': 1,
-              'close|100-2000.2': 1,
-              'high|100-2000.2': 1,
-              'low|100-2000.2': 1,
-              'volume|100000-10000000': 1
+              date: Mock.Random.date('yyyy-MM-dd'),
+              open: Mock.Random.float(10, 1000, 2, 2),
+              close: Mock.Random.float(10, 1000, 2, 2),
+              high: Mock.Random.float(10, 1000, 2, 2),
+              low: Mock.Random.float(10, 1000, 2, 2),
+              volume: Mock.Random.integer(1000000, 100000000)
             }
           ]
         }).array
       },
-      // predict字段无需修改，保持原逻辑
       predict: {
-        trend: Math.random() > 0.5 ? 'up' : 'down',
-        probability: Mock.mock('@integer(60, 95)'),
-        accuracy_rate: Mock.mock('@integer(70, 90)'),
-        target_price: Mock.mock(`@float(${price * 1.05}, ${price * 1.1}, 2, 2)`),
-        support_price: Mock.mock(`@float(${price * 0.95}, ${price}, 2, 2)`),
-        pressure_price: Mock.mock(`@float(${price * 1.05}, ${price * 1.1}, 2, 2)`),
+        up_probability: Mock.Random.integer(50, 95),
+        target_price: Mock.Random.float(10, 1000, 2, 2),
+        accuracy_rate: Mock.Random.integer(70, 90)
+      },
+      related_stocks: Mock.mock({
+        [`array|5`]: [
+          {
+            code: Mock.Random.string('number', 6),
+            name: Mock.Random.ctitle(2, 4),
+            relation: Mock.Random.pick(['同行业', '同概念'])
+          }
+        ]
+      }).array
+    }
+  }
+})
+
+// 搜索联想数据
+Mock.mock(/\/api\/search\/suggest/, 'get', (options) => {
+  const urlParams = new URLSearchParams(options.url.split('?')[1] || '');
+  const keyword = urlParams.get('keyword') || '';
+  return {
+    code: 200,
+    msg: 'success',
+    data: [
+      {
+        value: `${Mock.Random.ctitle(2, 4)}(${Mock.Random.string('number', 6)})`,
+        code: Mock.Random.string('number', 6),
+        name: Mock.Random.ctitle(2, 4),
+        type: 'stock'
+      },
+      {
+        value: `${Mock.Random.ctitle(2, 4)}(${Mock.Random.string('number', 6)})`,
+        code: Mock.Random.string('number', 6),
+        name: Mock.Random.ctitle(2, 4),
+        type: 'stock'
+      },
+      {
+        value: 'AI选股',
+        path: '/ai/select',
+        type: 'function'
+      },
+      {
+        value: '模拟交易',
+        path: '/trade',
+        type: 'function'
       }
-    }
+    ]
   }
 })
 
-// 新增：模拟大盘指数接口（匹配quote.js中的loadMarketIndex）
-Mock.mock(/\/quote\/marketIndex/, 'get', () => {
-  return {
-    code: 200,
-    msg: 'success',
-    data: {
-      sh: 3250.15,
-      sz: 10500.28,
-      cy: 2180.56,
-      bj: 980.33
-    }
-  }
-})
+// 新增K线数据Mock
+Mock.mock(/\/api\/quote\/getKlineData/, 'get', (options) => {
+  const urlParams = new URLSearchParams(options.url.split('?')[1] || '');
+  const code = urlParams.get('code') || '600519';
+  const type = urlParams.get('type') || 'day';
 
-// 新增：模拟批量获取自选股行情（匹配 /quote/batch）
-Mock.mock(/\/quote\/batch/, 'get', (options) => {
-  const urlParamStr = options.url.split('?')[1] || ''
-  const params = urlParamStr.split('&').reduce((obj, item) => {
-    if (!item) return obj
-    const [key, value] = item.split('=')
-    obj[decodeURIComponent(key)] = decodeURIComponent(value)
-    return obj
-  }, {})
-  const codes = params.codes ? params.codes.split(',') : [] // 解析逗号分隔的代码
+  let dataCount = 30 
+  if (type === 'week') dataCount = 52 
+  if (type === 'month') dataCount = 12 
+  if (type === 'min') dataCount = 240 
 
-  // 生成对应代码的行情数据
-  const list = codes.map(code => {
-    const price = Mock.mock('@float(100, 2000, 2, 2)')
-    const change = Mock.mock('@float(1, 50, 2, 2)')
-    return {
-      code,
-      name: '@cword(2,4)',
-      price,
-      change: Math.random() > 0.5 ? change : -change,
-      change_rate: Math.random() > 0.5 ? (change/price*100).toFixed(2) : -(change/price*100).toFixed(2)
-    }
-  })
+  const klineData = Mock.mock({
+    [`array|${dataCount}`]: [
+      {
+        date: type === 'min' 
+          ? Mock.Random.time('HH:mm') 
+          : Mock.Random.date('yyyy-MM-dd'),
+        open: Mock.Random.float(10, 1000, 2, 2),
+        close: Mock.Random.float(10, 1000, 2, 2),
+        high: function() {
+          return Math.max(this.open, this.close) + Mock.Random.float(0, 10, 2, 2)
+        },
+        low: function() {
+          return Math.min(this.open, this.close) - Mock.Random.float(0, 10, 2, 2)
+        },
+        volume: Mock.Random.integer(1000000, 100000000)
+      }
+    ]
+  }).array
 
   return {
     code: 200,
     msg: 'success',
-    data: { list }
+    data: klineData
   }
 })

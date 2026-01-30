@@ -1,48 +1,63 @@
-<!-- src/views/quote/QuoteHome.vue -->
 <template>
-  <!-- 仅渲染行情列表组件（布局已由App.vue的MainLayout提供） -->
   <div class="quote-home">
-    <StockQuote />
+    <el-card shadow="hover" class="quote-card">
+      <div class="card-header">
+        <h2>沪深A股实时行情</h2>
+        <el-button type="text" icon="el-icon-refresh" @click="refreshData">刷新</el-button>
+      </div>
+      <StockQuote ref="stockQuote" />
+    </el-card>
   </div>
 </template>
 
 <script>
-// 引入行情列表核心组件
 import StockQuote from '@/components/quote/StockQuote.vue'
 
 export default {
-  name: 'QuoteHome',
-  components: {
-    StockQuote
-  },
+  components: { StockQuote },
+  // 新增：组件挂载后主动触发StockQuote的初始数据加载
   mounted() {
-    // 可选：页面挂载后的额外逻辑（如埋点、数据预加载）
-    console.log('行情首页已加载')
+    // 延迟100ms，确保子组件已挂载完成
+    setTimeout(() => {
+      this.refreshData()
+    }, 100)
+  },
+  methods: {
+    // 刷新行情数据
+    refreshData() {
+      // 容错：避免ref获取不到组件的情况
+      if (this.$refs.stockQuote) {
+        this.$refs.stockQuote.fetchQuoteList()
+        this.$message.success('行情刷新成功')
+      } else {
+        this.$message.warning('行情组件加载中，请稍后重试')
+      }
+    }
   }
 }
 </script>
 
 <style scoped>
-/* 适配MainLayout的主内容区样式 */
 .quote-home {
-  width: 100%;
   height: 100%;
-  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+.quote-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+h2 {
+  font-size: 18px;
+  color: #333;
   margin: 0;
-}
-
-/* 穿透MainLayout的样式，优化行情组件的展示 */
-::v-deep .content-wrapper {
-  padding: 16px;
-  background-color: #f8f8f8;
-  height: 100%;
-  overflow-y: auto;
-}
-
-/* 移动端适配 */
-@media (max-width: 767px) {
-  ::v-deep .content-wrapper {
-    padding: 12px;
-  }
 }
 </style>

@@ -1,354 +1,180 @@
 <template>
-  <div class="header-container">
-    <!-- Logo区域 -->
-    <div class="logo">
-      <h1>同花顺行情分析</h1>
+  <div class="header">
+    <!-- Logo -->
+    <div class="logo" @click="$router.push('/')">
+      同花顺行情分析
     </div>
-
-    <!-- 顶部导航菜单（PC端显示） -->
-    <nav class="top-nav" v-if="isPc">
-      <router-link
-        :to="item.path"
-        :class="['nav-item', $route.path === item.path ? 'active' : '']"
-        v-for="(item, index) in navList"
-        :key="index"
-      >
-        {{ item.name }}
-      </router-link>
-    </nav>
-
-    <!-- 搜索区域 -->
+    <!-- 顶部导航菜单（PC端） -->
+    <div class="nav-menu" v-if="isPc || isMobileLandscape">
+      <el-menu mode="horizontal" :default-active="currentRoute">
+        <el-menu-item index="/" @click="$router.push('/')">行情</el-menu-item>
+        <el-menu-item index="/ai/select" @click="$router.push('/ai/select')">AI选股</el-menu-item>
+        <el-menu-item index="/trade" @click="$router.push('/trade')">交易</el-menu-item>
+        <el-menu-item index="/mine" @click="$router.push('/mine')">我的</el-menu-item>
+      </el-menu>
+    </div>
+    <!-- 全局搜索框 -->
     <div class="search-container">
       <el-autocomplete
-        v-model="searchValue"
+        v-model="searchInput"
         :fetch-suggestions="querySearch"
         :trigger-on-focus="false"
-        placeholder="请输入股票代码/名称"
+        placeholder="输入股票代码/名称/功能"
         @select="handleSearchSelect"
-        @change="handleSearchChange"
         class="search-input"
       ></el-autocomplete>
+      <el-button type="primary" icon="el-icon-search" @click="handleSearch">搜索</el-button>
     </div>
-
-    <!-- 移动端菜单按钮（<768px显示） -->
+    <!-- 移动端菜单按钮 -->
     <el-button
-      class="mobile-menu-btn"
       icon="el-icon-menu"
-      @click="showMobileMenu = true"
-      v-if="!isPc"
+      class="mobile-menu-btn"
+      v-if="isMobile && !isMobileLandscape"
+      @click="openMobileDrawer"
     ></el-button>
-
-    <!-- 手写移动端导航抽屉 -->
-    <!-- 遮罩层 -->
-    <div class="mobile-drawer-mask" v-if="showMobileMenu" @click="showMobileMenu = false"></div>
-    <!-- 抽屉主体（右侧滑出） -->
-    <div class="mobile-drawer" :class="{ 'drawer-show': showMobileMenu }">
-      <!-- 抽屉头部 -->
-      <div class="drawer-header">
-        <span class="drawer-title">功能导航</span>
-        <span class="drawer-close" @click="showMobileMenu = false">×</span>
-      </div>
-      <!-- 抽屉内容 -->
-      <div class="mobile-nav">
-        <router-link
-          :to="item.path"
-          :class="['mobile-nav-item', $route.path === item.path ? 'active' : '']"
-          v-for="(item, index) in navList"
-          :key="index"
-          @click="showMobileMenu = false"
-        >
-          {{ item.name }}
-        </router-link>
-      </div>
-    </div>
   </div>
 </template>
 
 <script>
+import { mapState } from 'vuex'
+import request from '@/utils/request'
+
 export default {
-  name: 'Header',
   data() {
     return {
-      // 搜索框绑定值
-      searchValue: '',
-      // 移动端菜单抽屉显示状态
-      showMobileMenu: false,
-      // 是否为PC端
-      isPc: true,
-      // 顶部导航列表
-      navList: [
-        { path: '/', name: '行情' },
-        { path: '/ai/select', name: 'AI选股' },
-        { path: '/trade', name: '交易' },
-        { path: '/mine', name: '我的' }
-      ],
-      // 股票模拟数据（用于搜索联想）
-      stockList: [
-        { value: '600000', label: '浦发银行' },
-        { value: '000001', label: '平安银行' },
-        { value: '300001', label: '特锐德' },
-        { value: '600036', label: '招商银行' },
-        { value: '000858', label: '五粮液' }
-      ],
-      // 搜索记录缓存（最多5条）
-      searchHistory: []
+      searchInput: '',
+      searchSuggestions: [],
+      screenWidth: window.innerWidth
+    }
+  },
+  computed: {
+    ...mapState({
+      searchHistory: state => state.user.searchHistory
+    }),
+    currentRoute() {
+      return this.$route.path
+    },
+    isPc() {
+      return this.screenWidth >= 1200
+    },
+    isMobile() {
+      return this.screenWidth < 768
+    },
+    isMobileLandscape() {
+      return this.isMobile && window.innerHeight < window.innerWidth
     }
   },
   mounted() {
-    // 初始化判断终端类型
-    this.judgeTerminal()
-    // 监听窗口大小变化
-    window.addEventListener('resize', this.judgeTerminal)
-    // 从本地缓存加载搜索记录
-    this.loadSearchHistory()
-  },
-  beforeDestroy() {
-    // 移除窗口监听
-    window.removeEventListener('resize', this.judgeTerminal)
+    window.addEventListener('resize', () => {
+      this.screenWidth = window.innerWidth
+    })
   },
   methods: {
-    // 判断终端类型（PC端≥768px，移动端<768px）
-    judgeTerminal() {
-      this.isPc = window.innerWidth >= 768
+    // 打开移动端抽屉
+    openMobileDrawer() {
+      this.$parent.isMobileDrawerShow = true
     },
     // 搜索联想查询
     querySearch(queryString, cb) {
-      // 合并股票数据和搜索记录（去重）
-      const historyData = this.searchHistory.map(item => ({
-        value: item.value,
-        label: `${item.label}（历史）`
-      }))
-      const stockData = this.stockList.filter(item => {
-        return item.label.includes(queryString) || item.value.includes(queryString)
+      if (!queryString) {
+        // 无输入时显示历史记录
+        cb(this.searchHistory.slice(0, 5))
+        return
+      }
+      // 调用搜索联想接口（Mock）
+      request.get('/api/search/suggest', { params: { keyword: queryString } }).then(res => {
+        this.searchSuggestions = res.data
+        cb(res.data)
       })
-      const result = [...stockData, ...historyData].filter((item, index, arr) => {
-        return arr.findIndex(i => i.value === item.value) === index
-      })
-      cb(result)
     },
-    // 选择搜索结果处理
+    // 处理搜索选择
     handleSearchSelect(item) {
-      // 缓存搜索记录（最多5条）
-      this.cacheSearchHistory(item)
-      // 跳转到个股详情页
-      this.$router.push(`/detail/${item.value}`)
-      // 清空搜索框
-      this.searchValue = ''
+      if (item.type === 'stock') {
+        this.$router.push(`/detail/${item.code}`)
+      } else if (item.type === 'function') {
+        this.$router.push(item.path)
+      }
+      // 保存搜索历史
+      this.saveSearchHistory(item)
+      this.searchInput = ''
     },
-    // 搜索框值变化处理（回车搜索）
-    handleSearchChange() {
-      if (!this.searchValue) return
-      // 查找匹配的股票
-      const matchItem = this.stockList.find(item => {
-        return item.label === this.searchValue || item.value === this.searchValue
-      })
-      if (matchItem) {
-        this.handleSearchSelect(matchItem)
+    // 手动触发搜索
+    handleSearch() {
+      if (!this.searchInput) return
+      // 优先匹配股票
+      const stockItem = this.searchSuggestions.find(item => item.type === 'stock')
+      if (stockItem) {
+        this.$router.push(`/detail/${stockItem.code}`)
       } else {
-        this.$message.warning('未找到匹配的股票，请检查代码/名称')
+        this.$message.info('暂无匹配结果')
       }
+      // 保存搜索历史
+      this.saveSearchHistory({ name: this.searchInput, type: 'history' })
+      this.searchInput = ''
     },
-    // 加载本地缓存的搜索记录
-    loadSearchHistory() {
-      const history = localStorage.getItem('stockSearchHistory')
-      if (history) {
-        this.searchHistory = JSON.parse(history)
-      }
-    },
-    // 缓存搜索记录到本地
-    cacheSearchHistory(item) {
-      // 去重：如果已存在则删除原有项
-      this.searchHistory = this.searchHistory.filter(i => i.value !== item.value)
-      // 添加新记录到头部
-      this.searchHistory.unshift({ value: item.value, label: item.label })
-      // 限制最多5条
-      if (this.searchHistory.length > 5) {
-        this.searchHistory = this.searchHistory.slice(0, 5)
-      }
-      // 保存到本地缓存
-      localStorage.setItem('stockSearchHistory', JSON.stringify(this.searchHistory))
+    // 保存搜索历史（去重，最多5条）
+    saveSearchHistory(item) {
+      const newHistory = this.searchHistory.filter(h => h.name !== item.name)
+      newHistory.unshift(item)
+      if (newHistory.length > 5) newHistory.pop()
+      this.$store.state.user.searchHistory = newHistory
     }
   }
 }
 </script>
 
 <style scoped>
-.header-container {
+.header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 20px;
   height: 60px;
   background-color: #fff;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
-  position: relative;
-  z-index: 100;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 0 16px;
 }
-
-/* Logo样式 */
-.logo h1 {
-  font-size: 18px;
+.logo {
+  font-size: 20px;
+  font-weight: bold;
   color: #e53935;
-  margin: 0;
-  font-weight: 600;
+  cursor: pointer;
 }
-
-/* PC端导航样式 */
-.top-nav {
-  display: flex;
+.nav-menu {
+  flex: 1;
   margin: 0 20px;
 }
-
-.nav-item {
-  padding: 0 15px;
-  height: 60px;
-  line-height: 60px;
-  color: #333;
-  text-decoration: none;
-  font-size: 14px;
-  transition: color 0.2s;
+.el-menu--horizontal {
+  border-bottom: none;
 }
-
-.nav-item.active {
-  color: #e53935;
+.el-menu-item.is-active {
+  color: #e53935 !important;
   border-bottom: 2px solid #e53935;
 }
-
-.nav-item:hover {
-  color: #e53935;
-}
-
-/* 搜索框样式 */
 .search-container {
-  flex: 1;
-  max-width: 400px;
-}
-
-.search-input {
-  width: 100%;
-}
-
-/* 移动端菜单按钮 */
-.mobile-menu-btn {
-  color: #333;
-  border: none;
-  background: transparent;
-  font-size: 18px;
-  z-index: 1001; /* 高于遮罩层 */
-}
-
-/* 手写抽屉 - 遮罩层 */
-.mobile-drawer-mask {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1000;
-  transition: background-color 0.3s ease;
-}
-
-/* 手写抽屉 - 主体容器 */
-.mobile-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  width: 50%;
-  height: 100%;
-  background-color: #fff;
-  z-index: 1001;
-  transform: translateX(100%); /* 初始隐藏在右侧 */
-  transition: transform 0.3s ease;
-  box-shadow: -2px 0 12px rgba(0, 0, 0, 0.1);
-}
-
-/* 抽屉显示状态 */
-.mobile-drawer.drawer-show {
-  transform: translateX(0); /* 滑入可视区域 */
-}
-
-/* 抽屉头部 */
-.drawer-header {
-  padding: 15px 20px;
-  border-bottom: 1px solid #f8f8f8;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  width: 300px;
 }
-
-.drawer-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #333;
+.search-input {
+  margin-right: 8px;
 }
-
-.drawer-close {
-  font-size: 20px;
-  color: #666;
-  cursor: pointer;
-  width: 24px;
-  height: 24px;
-  line-height: 24px;
-  text-align: center;
-  transition: color 0.2s;
+.mobile-menu-btn {
+  display: none;
 }
-
-.drawer-close:hover {
-  color: #e53935;
-}
-
-/* 移动端导航样式 */
-.mobile-nav {
-  padding: 20px 0;
-  height: calc(100% - 60px); /* 减去头部高度 */
-  overflow-y: auto;
-}
-
-.mobile-nav-item {
-  display: block;
-  padding: 15px 20px;
-  color: #333;
-  text-decoration: none;
-  font-size: 16px;
-  border-bottom: 1px solid #f8f8f8;
-  transition: all 0.2s;
-}
-
-.mobile-nav-item.active {
-  color: #e53935;
-  background-color: #fef0f0;
-}
-
-.mobile-nav-item:hover {
-  background-color: #f5f5f5;
-  color: #e53935;
-}
-
-/* 响应式适配 */
-@media (max-width: 768px) {
-  .header-container {
-    padding: 0 10px;
-  }
-
-  .logo h1 {
-    font-size: 16px;
-  }
-
+@media screen and (max-width: 1199px) {
   .search-container {
-    max-width: 200px;
-    margin: 0 10px;
-  }
-
-  /* 移动端抽屉宽度适配 */
-  .mobile-drawer {
-    width: 80%;
+    width: 200px;
   }
 }
-
-@media (min-width: 768px) and (max-width: 1200px) {
+@media screen and (max-width: 767px) {
+  .nav-menu {
+    display: none;
+  }
+  .mobile-menu-btn {
+    display: block;
+  }
   .search-container {
-    max-width: 300px;
+    width: 150px;
   }
 }
 </style>

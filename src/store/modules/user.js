@@ -1,19 +1,12 @@
 export default {
-  namespaced: true,
   state: {
-    token: '', // 用户登录令牌
-    userInfo: { // 个人信息
-      username: '',
-      avatar: '',
-      userId: '',
-      riskLevel: 0 // 风险等级
-    },
-    selfSelectStocks: [], // 自选股列表（{ code: '600000', name: '浦发银行', group: '默认分组' }）
-    priceAlerts: [], // 价格提醒设置
-    systemSetting: { // 系统设置
-      theme: 'light', // 主题（light/dark）
-      refreshInterval: 5, // 行情刷新间隔（秒）
-      isSoundAlert: true // 声音提醒
-    }
+    username: '股票新手',
+    balance: 100000.00, // 模拟资金
+    todayProfit: 0, // 今日盈亏
+    selfSelect: [
+      { code: '600519', name: '贵州茅台', group: '消费龙头' },
+      { code: '002594', name: '比亚迪', group: '科技成长' }
+    ], // 自选股
+    searchHistory: [] // 搜索历史
   }
 }
